@@ -121,7 +121,3 @@ Runs `scripts/s3vectors_hybrid_demo.py`:
 ```
 
 - Deletes the inserted vectors even if the query fails
-
-## Notes
-
-- `.env` is ignored by git, but treat it as sensitive (AWS/OpenAI keys, etc.). Prefer using `AWS_PROFILE`/SSO instead of long-lived static keys.
