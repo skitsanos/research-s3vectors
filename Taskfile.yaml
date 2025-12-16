@@ -1,0 +1,54 @@
+version: '3'
+
+silent: true
+
+dotenv:
+  - .env
+
+includes:
+  app: Taskfile.app.yaml
+
+tasks:
+  venv:
+    desc: Create Python virtual environment in .venv folder (requires Python 3.10+)
+    cmds:
+      - |
+        PYTHON_CMD=""
+        for cmd in python3.12 python3.11 python3.10 python3 python; do
+          if command -v $cmd &> /dev/null; then
+            version=$($cmd -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+            major=$(echo $version | cut -d. -f1)
+            minor=$(echo $version | cut -d. -f2)
+            if [ "$major" -ge 3 ] && [ "$minor" -ge 10 ]; then
+              PYTHON_CMD=$cmd
+              break
+            fi
+          fi
+        done
+        if [ -z "$PYTHON_CMD" ]; then
+          echo "Error: Python 3.10 or higher is required"
+          exit 1
+        fi
+        echo "Using $PYTHON_CMD (version $($PYTHON_CMD --version))"
+        $PYTHON_CMD -m venv .venv
+        echo "Virtual environment created in .venv"
+    status:
+      - test -d .venv
+
+  install:
+    desc: Install v1 (editable) + dependencies
+    deps:
+      - venv
+    cmds:
+      - |
+        source .venv/bin/activate
+        pip install --upgrade pip
+        pip install --upgrade -r requirements.txt
+        echo "Installed successfully"
+
+  cleanup:
+    desc: Remove virtual environment
+    cmds:
+      - |
+        rm -rf .venv
+        echo "Virtual environment removed"

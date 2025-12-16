@@ -1,0 +1,129 @@
+version: 3
+
+tasks:
+  check-aws-credentials:
+    desc: Verify AWS credentials + S3 bucket access (STS + head_bucket)
+    cmds:
+      - |
+        source .venv/bin/activate
+        python scripts/check_aws_credentials.py
+
+  s3vectors-smoke:
+    desc: Create index (if needed), put vectors, and run a search
+    cmds:
+      - |
+        source .venv/bin/activate
+        python scripts/s3vectors_smoke.py
+
+  s3vectors-smoke-filter:
+    desc: Run query with metadata filter and cleanup inserted vectors
+    cmds:
+      - |
+        source .venv/bin/activate
+        S3V_FILTER_JSON='{"kind":{"$in":["smoke"]}}' S3V_CLEANUP=true python scripts/s3vectors_smoke.py
+
+  s3vectors-hybrid-demo:
+    desc: Demonstrate vector query + category/origin metadata filter (with cleanup)
+    cmds:
+      - |
+        source .venv/bin/activate
+        python scripts/s3vectors_hybrid_demo.py
+
+  check-openai-credential:
+    desc: Verify OpenAI API key is configured correctly
+    cmds:
+      - |
+        echo "Checking OpenAI Credentials..."
+        echo ""
+
+        if [ -z "$OPENAI_API_KEY" ]; then
+          echo "❌ OPENAI_API_KEY is not set"
+          exit 1
+        else
+          echo "✓ OPENAI_API_KEY is set"
+        fi
+
+        echo ""
+        echo "Testing connection to OpenAI API..."
+
+        RESPONSE=$(curl -s -w "\n%{http_code}" \
+          "https://api.openai.com/v1/models" \
+          -H "Authorization: Bearer ${OPENAI_API_KEY}")
+
+        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+        BODY=$(echo "$RESPONSE" | sed '$d')
+
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "✓ OpenAI API connection successful (HTTP $HTTP_CODE)"
+          echo ""
+          MODEL_COUNT=$(echo "$BODY" | grep -o '"id"' | wc -l | tr -d ' ')
+          echo "Available models: $MODEL_COUNT"
+        else
+          echo "❌ OpenAI API connection failed (HTTP $HTTP_CODE)"
+          echo ""
+          echo "Response:"
+          echo "$BODY"
+          exit 1
+        fi
+
+  check-azure-credentials:
+    desc: Verify Azure OpenAI credentials are configured correctly
+    cmds:
+      - |
+        echo "Checking Azure OpenAI Credentials..."
+        echo ""
+
+        # Check required environment variables
+        if [ -z "$AZURE_OPENAI_API_KEY" ]; then
+          echo "❌ AZURE_OPENAI_API_KEY is not set"
+          exit 1
+        else
+          echo "✓ AZURE_OPENAI_API_KEY is set"
+        fi
+
+        if [ -z "$AZURE_OPENAI_ENDPOINT" ]; then
+          echo "❌ AZURE_OPENAI_ENDPOINT is not set"
+          exit 1
+        else
+          echo "✓ AZURE_OPENAI_ENDPOINT: $AZURE_OPENAI_ENDPOINT"
+        fi
+
+        if [ -z "$LLM_MODEL" ]; then
+          echo "⚠ LLM_MODEL is not set, using default"
+          MODEL="gpt-4o"
+        else
+          echo "✓ LLM_MODEL: $LLM_MODEL"
+          MODEL="$LLM_MODEL"
+        fi
+
+        API_VERSION="${AZURE_OPENAI_API_VERSION:-2024-10-21}"
+        echo "✓ API_VERSION: $API_VERSION"
+        echo ""
+        echo "Testing connection to Azure OpenAI..."
+
+        # Make a minimal request to test credentials
+        RESPONSE=$(curl -s -w "\n%{http_code}" \
+          "${AZURE_OPENAI_ENDPOINT}/openai/deployments/${MODEL}/chat/completions?api-version=${API_VERSION}" \
+          -H "Content-Type: application/json" \
+          -H "api-key: ${AZURE_OPENAI_API_KEY}" \
+          -d '{
+            "messages": [{"role": "user", "content": "Say OK"}],
+            "max_tokens": 5
+          }')
+
+        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+        BODY=$(echo "$RESPONSE" | sed '$d')
+
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "✓ Azure OpenAI connection successful (HTTP $HTTP_CODE)"
+          echo ""
+          echo "Response preview:"
+          echo "$BODY" | head -c 200
+          echo "..."
+        else
+          echo "❌ Azure OpenAI connection failed (HTTP $HTTP_CODE)"
+          echo ""
+          echo "Response:"
+          echo "$BODY"
+          exit 1
+        fi
